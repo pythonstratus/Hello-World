@@ -105,3 +105,30 @@ And in the FROM clause, remove the `TABLE(mft_ind_vals(...)) c` line entirely so
 ```
 
 That should bring you to 379. The legacy TimeView is literally just ENT joined to TIMETIN — every other table was added during modernization and was inflating row counts.
+
+
+Two things going on here:
+
+**The 969 is likely correct.** The level filter `trunc(tt.roid/power(10, 8-7)) = 2613371` matches all ROIDs from 26133710 through 26133719. The 969 is the total across *all* sub-ROIDs in that group, not just one.
+
+**You tested the wrong ROID.** Look at your legacy screenshot — the ROID column shows **26133711** (8 digits), not 2613371 (7 digits). When you filtered `tt.roid = 2613371`, that's a different number entirely.
+
+Try:
+
+```sql
+AND tt.roid = 26133711
+```
+
+That should give you 379, matching legacy. And to verify the level filter is working correctly, you can also check:
+
+```sql
+SELECT tt.roid, COUNT(*)
+FROM ENT a, filtered_timetin tt
+WHERE a.TINSID = tt.TIMESID
+  AND trunc(tt.roid/power(10, 8 - 7)) = 2613371
+  AND sysdate - tt.rptdt <= 90
+GROUP BY tt.roid
+ORDER BY tt.roid
+```
+
+This will show you the row count per sub-ROID. The row for 26133711 should show 379, and all sub-ROIDs should sum to 969.
