@@ -132,3 +132,32 @@ ORDER BY tt.roid
 ```
 
 This will show you the row count per sub-ROID. The row for 26133711 should show 379, and all sub-ROIDs should sum to 969.
+
+
+Sorry — that's the CTE from the main query, you can't use it standalone. For the ad-hoc test in TOAD, just use TIMETIN directly with the same filters:
+
+```sql
+SELECT tt.roid, COUNT(*)
+FROM ENT a, TIMETIN tt
+WHERE a.TINSID = tt.TIMESID
+  AND tt.RPTDT > TO_DATE('01/01/1900', 'mm/dd/yyyy')
+  AND case_org(tt.roid) = 'CF'
+  AND trunc(tt.roid/power(10, 8 - 7)) = 2613371
+  AND sysdate - tt.rptdt <= 90
+GROUP BY tt.roid
+ORDER BY tt.roid
+```
+
+And for the quick 379 check:
+
+```sql
+SELECT COUNT(*)
+FROM ENT a, TIMETIN tt
+WHERE a.TINSID = tt.TIMESID
+  AND tt.RPTDT > TO_DATE('01/01/1900', 'mm/dd/yyyy')
+  AND case_org(tt.roid) = 'CF'
+  AND tt.roid = 26133711
+  AND sysdate - tt.rptdt <= 90
+```
+
+If this returns 379, the v4 query is correct and the 969 was just the sum across all sub-ROIDs under 2613371x.
