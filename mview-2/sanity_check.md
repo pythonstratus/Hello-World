@@ -134,3 +134,29 @@ WHERE row_num = 1;
 ```
 
 If this returns **1773**, we have an exact match and the fix is confirmed. The root cause is crystal clear: the current deployed query is missing `b.STATUS = 'O'` and `c.STATUS = 'O'` filters — it's letting in Closed, Examined, Returned, and X-status modules and trails, inflating from 1773 to 3018.
+
+Not quite the 90-day window — there's no 90-day filter in Module View like Activity View had with `actdt`. But 1794 vs 1773 is **21 records off (1.2%)**, and there are a couple of likely explanations for that small delta.
+
+The most likely cause: some entities have **multiple open TRANTRAIL rows** with different ROIDs. The legacy uses `trailmatch_new`/`SWITCHROID` to pick exactly one trail per entity, but our simplified `c.STATUS = 'O'` can return more than one trail row per entity, and if they have different `roid` values, the ROW_NUMBER dedup won't collapse them (since `roid` is in the partition key).
+
+Run this quick check to confirm:
+
+```sql
+-- Are there entities with multiple open trail rows?
+SELECT COUNT(*) as ENTITIES_WITH_MULTI_TRAILS
+FROM (
+  SELECT a.TINSID, COUNT(*) as trail_cnt
+  FROM ENT a
+  INNER JOIN TRANTRAIL c ON a.TINSID = c.TINSID
+  INNER JOIN ENTMOD b ON a.TINSID = b.EMODSID
+  WHERE trunc(b.roid/power(10, 8-6)) = 251435
+    AND b.STATUS = 'O'
+    AND ORG = 'CF'
+    AND c.STATUS = 'O'
+    AND case_org(b.roid) = 'CF'
+  GROUP BY a.TINSID
+  HAVING COUNT(DISTINCT c.ROID) > 1
+);
+```
+
+If that returns ~21 or close, we know the gap is trail duplication and we can add a trail-rank filter to pick one trail per entity (matching legacy behavior). But either way — **we've gone from 3018 → 1794, and the fix direction is confirmed**. Want me to go ahead and produce the corrected `MviewOCRByLevel.sql` with `b.STATUS = 'O'` and `c.STATUS = 'O'` now, so you can deploy it while we fine-tune the last 21?
