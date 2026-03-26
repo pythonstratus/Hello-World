@@ -183,11 +183,11 @@ FROM (
             OICACCYR                                                    AS OICACCYR,
             LPAD(NVL(e.RISK, 399) || NVL(e.ARISK, 'e'), 4, ' ')        AS ARANK,
             0                                                           AS TOT_IRP_INC,
-            NVL(b.EMPTOUCH, 0)                                          AS EMPTOUCH,
-            NVL(b.LSTTOUCH, 0)                                          AS LSTTOUCH,
+            b.EMPTOUCH                                                  AS EMPTOUCH,
+            b.LSTTOUCH                                                  AS LSTTOUCH,
             (CASE
                 WHEN NVL(b.ORG, ' ') = 'CP' THEN CCPTOUCH
-                ELSE GREATEST(NVL(TOTTOUCH, 0), NVL(b.EMPTOUCH, 0))
+                ELSE GREATEST(TOTTOUCH, b.EMPTOUCH)
             END)                                                        AS TOTTOUCH,
             NVL(e.STREET2, ' ')                                         AS STREET2,
             NVL(b.PROID, 0)                                             AS PROID,
