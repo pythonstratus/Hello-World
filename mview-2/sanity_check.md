@@ -94,3 +94,43 @@ WHERE row_num = 1;
 Since `b.STATUS = 'O'` means all modules are open, the TRANTRAIL status should also be 'O' — no need for the complex SWITCHROID/max_extrdt trail matching at all. Open cases have exactly one active trail row.
 
 If this returns **1,773**, we've nailed it and the fix is a single line change in your deployed query. Report back!
+
+
+**1794 — only 21 off from 1773!** We're right on top of it. The 21 extra records are from the missing `case_org(b.roid) = 'CF'` filter — I left it out of the confirmation query. Run this:
+
+```sql
+-- FINAL CONFIRMATION: Add case_org filter
+SELECT COUNT(*)
+FROM (
+  SELECT t.*,
+    ROW_NUMBER() OVER (
+      PARTITION BY tin, roid, tpctrl, mft, period, type, balance, totassd,
+                   m_assnro, lfiind, ftldetdt, ased, csed
+      ORDER BY tin, roid, tpctrl, mft, period, type, balance, totassd,
+               m_assnro, lfiind, ftldetdt, ased, csed
+    ) AS row_num
+  FROM (
+    SELECT
+      TIN, c.TINSID, b.ROID as M_ROID, c.ROID,
+      TPCTRL, MFT, PERIOD, TYPE, BALANCE, TOTASSD,
+      b.ASSNRO as M_ASSNRO,
+      TO_NUMBER(NVL(a.LFIIND, 0)) as LFIIND,
+      NVL(FTLDETDT, to_date('01/01/1900','mm/dd/yyyy')) as FTLDETDT,
+      (CASE WHEN TYPE IN ('O','N') THEN NVL(OIASED, to_date('01/01/1900','mm/dd/yyyy'))
+            ELSE ASED END) as ASED,
+      (CASE WHEN TYPE IN ('O','N') THEN NVL(OICSED, to_date('01/01/1900','mm/dd/yyyy'))
+            ELSE CSED END) as CSED
+    FROM ENT a
+    INNER JOIN TRANTRAIL c ON a.TINSID = c.TINSID
+    INNER JOIN ENTMOD b ON a.TINSID = b.EMODSID
+    WHERE trunc(b.roid/power(10, 8-6)) = 251435
+      AND b.STATUS = 'O'
+      AND ORG = 'CF'
+      AND c.STATUS = 'O'
+      AND case_org(b.roid) = 'CF'
+  ) t
+)
+WHERE row_num = 1;
+```
+
+If this returns **1773**, we have an exact match and the fix is confirmed. The root cause is crystal clear: the current deployed query is missing `b.STATUS = 'O'` and `c.STATUS = 'O'` filters — it's letting in Closed, Examined, Returned, and X-status modules and trails, inflating from 1773 to 3018.
