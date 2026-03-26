@@ -76,3 +76,32 @@ tour_cte AS (
 ```
 
 Same two CTEs, just adding `MIN()` and `GROUP BY roid` to guarantee one row per roid. That should stop the row multiplication.
+
+
+## ----------
+
+Same pattern — `TABLE(mft_ind_vals(a.tinsid, a.tinfs))` is also returning multiple rows per tinsid. And looking back at the legacy TVIEW screenshots, **it doesn't use `mft_ind_vals` either**. The legacy TVIEW is purely `FROM ENT a, TIMETIN tt` — nothing else.
+
+Remove the `TABLE(mft_ind_vals(...))` from the FROM clause and default those columns too:
+
+```sql
+-- Replace these lines that reference "c.":
+        0 AS BAL_941_14,               -- was c.BAL_941_14
+        0 AS CNT_941_14,               -- was c.CNT_941_14
+        0 AS CNT_941,                  -- was c.CNT_941
+        0 AS TDI_CNT_941,             -- was c.TDI_CNT_941
+        0 AS IND_941,                  -- was c.IND_941
+        'No' AS FORMATTED_IND_941,     -- was CASE on c.ind_941
+        0 AS BAL_941,                  -- was c.BAL_941
+```
+
+And in the FROM clause, remove the `TABLE(mft_ind_vals(...)) c` line entirely so it's just:
+
+```sql
+    FROM ENT a,
+         filtered_timetin tt,
+         seid_cte p,
+         tour_cte tour_sub
+```
+
+That should bring you to 379. The legacy TimeView is literally just ENT joined to TIMETIN — every other table was added during modernization and was inflating row counts.
